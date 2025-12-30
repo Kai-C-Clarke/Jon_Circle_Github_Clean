@@ -1,0 +1,18 @@
+Flask==3.0.3
+Flask-Cors==6.0.0
+gunicorn==23.0.0
+
+# Database & Configuration
+python-dotenv==1.0.1
+
+# AI & ML APIs
+openai==1.57.4
+anthropic==0.42.0
+
+# PDF & Image Processing
+fpdf2==2.8.2
+Pillow==10.4.0
+
+# Authentication
+PyJWT==2.8.0
+bcrypt==4.1.2
