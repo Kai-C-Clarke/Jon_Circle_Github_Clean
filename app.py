@@ -9,7 +9,6 @@ from ai_photo_matcher import suggest_photos_for_memory, apply_suggestion, sugges
 
 # Import our modules
 from database import init_db, get_db, migrate_db
-from database_improved import init_db as init_improved_db, migrate_db as migrate_improved_db
 from search_engine import EnhancedSearch
 from ai_search import ai_searcher  # NEW: Import AI search
 from utils import allowed_file, parse_date_input, categorize_memory
@@ -17,12 +16,6 @@ from pdf_generator import generate_memory_pdf, generate_family_album_pdf
 from werkzeug.utils import secure_filename
 import uuid
 import traceback
-
-# Import authentication modules
-from auth import AuthService, require_auth, InvalidCredentialsError, AccountLockedError, TokenExpiredError, InvalidTokenError
-from logger_config import security_logger, get_client_ip
-from security_config import SecurityConfig
-from flask import g
 
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -36,9 +29,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 
-# Initialize database with authentication support
-init_improved_db()
-migrate_improved_db()
+init_db()
+migrate_db()
 
 # Add to app.py after init_db()
 def scan_existing_uploads():
@@ -872,25 +864,15 @@ def upload_media():
 
 @app.route('/api/export/biography/generate', methods=['POST'])
 def generate_biography_draft():
-    """Generate biography drafts using both DeepSeek and Claude."""
+    """Generate biography using DeepSeek and auto-save to session."""
     try:
-        data = request.json or {}
-        model = data.get('model', 'both')
-        
-        # Check API keys
+        # Check DeepSeek API key
         deepseek_key = os.getenv('DEEPSEEK_API_KEY')
-        anthropic_key = os.getenv('ANTHROPIC_API_KEY')
         
-        if model in ['deepseek', 'both'] and not deepseek_key:
+        if not deepseek_key:
             return jsonify({
                 'status': 'error',
                 'message': 'DeepSeek API key not configured'
-            }), 400
-        
-        if model in ['claude', 'both'] and not anthropic_key:
-            return jsonify({
-                'status': 'error',
-                'message': 'Anthropic API key not configured'
             }), 400
         
         # Fetch all memories
@@ -917,38 +899,26 @@ def generate_biography_draft():
                 'message': 'No memories found to generate biography'
             }), 400
         
-        result = {
-            'status': 'success',
-            'memory_count': len(memories)
-        }
-        
         # Generate with DeepSeek
-        if model in ['deepseek', 'both']:
-            try:
-                deepseek_narrative = generate_biography_deepseek(memories)
-                deepseek_chapters = parse_biography_into_chapters(deepseek_narrative)
-                result['deepseek'] = {
-                    'chapters': deepseek_chapters,
-                    'full_text': deepseek_narrative
-                }
-            except Exception as e:
-                print(f"DeepSeek generation error: {e}")
-                result['deepseek'] = {'error': str(e)}
-        
-        # Generate with Claude
-        if model in ['claude', 'both']:
-            try:
-                claude_narrative = generate_biography_claude(memories)
-                claude_chapters = parse_biography_into_chapters(claude_narrative)
-                result['claude'] = {
-                    'chapters': claude_chapters,
-                    'full_text': claude_narrative
-                }
-            except Exception as e:
-                print(f"Claude generation error: {e}")
-                result['claude'] = {'error': str(e)}
-        
-        return jsonify(result)
+        try:
+            deepseek_narrative = generate_biography_deepseek(memories)
+            deepseek_chapters = parse_biography_into_chapters(deepseek_narrative)
+            
+            # Return chapters to frontend (don't store in session - too large for cookies)
+            return jsonify({
+                'status': 'success',
+                'memory_count': len(memories),
+                'chapters': deepseek_chapters,
+                'model': 'deepseek'
+            })
+            
+        except Exception as e:
+            print(f"DeepSeek generation error: {e}")
+            traceback.print_exc()
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to generate biography: {str(e)}'
+            }), 500
     
     except Exception as e:
         print(f"Biography generation error: {e}")
@@ -1401,190 +1371,6 @@ def debug_media():
         "filesystem_files": fs_files,
         "uploads_folder": uploads_dir
     })
-
-# ============================================
-# AUTHENTICATION ROUTES
-# ============================================
-
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    """Register a new user."""
-    try:
-        data = request.json
-
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-
-        username = data.get('username')
-        email = data.get('email')
-        password = data.get('password')
-        full_name = data.get('full_name')
-
-        if not username or not email or not password:
-            return jsonify({'error': 'Username, email, and password are required'}), 400
-
-        # Register user
-        user = AuthService.register_user(username, email, password, full_name)
-
-        return jsonify({
-            'status': 'success',
-            'message': 'User registered successfully',
-            'user': user
-        }), 201
-
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        security_logger.log_error(f"Registration error: {str(e)}", e)
-        return jsonify({'error': 'Registration failed'}), 500
-
-
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    """Authenticate user and return tokens."""
-    try:
-        data = request.json
-
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-
-        username = data.get('username')
-        password = data.get('password')
-
-        if not username or not password:
-            return jsonify({'error': 'Username and password are required'}), 400
-
-        # Authenticate user
-        result = AuthService.login(username, password)
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Login successful',
-            'user': result['user'],
-            'access_token': result['access_token'],
-            'refresh_token': result['refresh_token']
-        }), 200
-
-    except InvalidCredentialsError as e:
-        return jsonify({'error': str(e)}), 401
-    except AccountLockedError as e:
-        return jsonify({'error': str(e)}), 423
-    except Exception as e:
-        security_logger.log_error(f"Login error: {str(e)}", e)
-        return jsonify({'error': 'Login failed'}), 500
-
-
-@app.route('/api/auth/logout', methods=['POST'])
-@require_auth
-def logout():
-    """Logout user and revoke refresh token."""
-    try:
-        data = request.json or {}
-        refresh_token = data.get('refresh_token')
-
-        # Logout user
-        AuthService.logout(g.current_user['id'], refresh_token)
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Logout successful'
-        }), 200
-
-    except Exception as e:
-        security_logger.log_error(f"Logout error: {str(e)}", e)
-        return jsonify({'error': 'Logout failed'}), 500
-
-
-@app.route('/api/auth/refresh', methods=['POST'])
-def refresh_token():
-    """Refresh access token using refresh token."""
-    try:
-        data = request.json
-
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-
-        refresh_token = data.get('refresh_token')
-
-        if not refresh_token:
-            return jsonify({'error': 'Refresh token is required'}), 400
-
-        # Generate new tokens
-        access_token, new_refresh_token = AuthService.refresh_access_token(refresh_token)
-
-        return jsonify({
-            'status': 'success',
-            'access_token': access_token,
-            'refresh_token': new_refresh_token
-        }), 200
-
-    except TokenExpiredError:
-        return jsonify({'error': 'Refresh token has expired'}), 401
-    except InvalidTokenError as e:
-        return jsonify({'error': str(e)}), 401
-    except Exception as e:
-        security_logger.log_error(f"Token refresh error: {str(e)}", e)
-        return jsonify({'error': 'Token refresh failed'}), 500
-
-
-@app.route('/api/auth/change-password', methods=['POST'])
-@require_auth
-def change_password():
-    """Change user password."""
-    try:
-        data = request.json
-
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-
-        old_password = data.get('old_password')
-        new_password = data.get('new_password')
-
-        if not old_password or not new_password:
-            return jsonify({'error': 'Old password and new password are required'}), 400
-
-        # Change password
-        AuthService.change_password(g.current_user['id'], old_password, new_password)
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Password changed successfully'
-        }), 200
-
-    except InvalidCredentialsError as e:
-        return jsonify({'error': str(e)}), 401
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        security_logger.log_error(f"Password change error: {str(e)}", e)
-        return jsonify({'error': 'Password change failed'}), 500
-
-
-@app.route('/api/auth/me', methods=['GET'])
-@require_auth
-def get_current_user():
-    """Get current authenticated user information."""
-    try:
-        user = g.current_user
-
-        return jsonify({
-            'status': 'success',
-            'user': {
-                'id': user['id'],
-                'username': user['username'],
-                'email': user['email'],
-                'full_name': user['full_name'],
-                'role': user['role'],
-                'is_active': user['is_active'],
-                'last_login': user['last_login'],
-                'created_at': user['created_at']
-            }
-        }), 200
-
-    except Exception as e:
-        security_logger.log_error(f"Get user error: {str(e)}", e)
-        return jsonify({'error': 'Failed to get user information'}), 500
-
 
 # ============================================
 # ERROR HANDLERS

@@ -16,6 +16,9 @@ const biographyState = {
     hasUnsavedEdits: false
 };
 
+// Store generated chapters in memory (not in session due to size limits)
+let currentBiographyChapters = null;
+
 // ========================================
 // PDF EXPORT FUNCTIONS
 // ========================================
@@ -128,7 +131,7 @@ async function generateFamilyAlbum() {
 // BIOGRAPHY GENERATION FUNCTIONS
 // ========================================
 
-async function generateBiography(model = 'both') {
+async function generateBiography() {
     try {
         // Reset state
         biographyState.hasUnsavedEdits = false;
@@ -143,7 +146,7 @@ async function generateBiography(model = 'both') {
         const response = await fetch('/api/export/biography/generate', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({model: model}),
+            body: JSON.stringify({}),
             signal: controller.signal
         });
         
@@ -151,16 +154,17 @@ async function generateBiography(model = 'both') {
         const data = await response.json();
         
         if (data.status === 'success') {
+            // Store chapters in memory
+            currentBiographyChapters = data.chapters;
             displayBiographyPreview(data);
         } else {
             showBiographyError('Error generating biography: ' + (data.message || 'Unknown error'));
         }
     } catch (error) {
         console.error('Error generating biography:', error);
-        clearTimeout(timeoutId);
         
         if (error.name === 'AbortError') {
-            showBiographyError('Request timeout. The AI models are taking too long to respond.');
+            showBiographyError('Request timeout. The AI is taking too long to respond.');
         } else {
             showBiographyError('Error generating biography. Please try again.');
         }
@@ -180,8 +184,8 @@ function showBiographyLoading() {
     content.innerHTML = `
         <div class="biography-loading">
             <i class="fas fa-spinner fa-spin fa-3x"></i>
-            <p>Generating biography with AI...</p>
-            <p>This may take 30-60 seconds. Both DeepSeek and Claude are analyzing your memories and crafting narratives.</p>
+            <p>Generating biography with DeepSeek AI...</p>
+            <p>This may take 30-60 seconds. The AI is analyzing your memories and crafting your narrative.</p>
             <div class="progress-container" style="margin-top: 20px; width: 80%; max-width: 400px;">
                 <div class="progress-bar" style="height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
                     <div class="progress-fill" style="height: 100%; width: 0%; background: #0066cc; transition: width 2s ease-in-out;"></div>
@@ -215,7 +219,7 @@ function showBiographyError(message) {
                 <button class="btn btn-secondary" onclick="closeBiographyPreview()">
                     Close
                 </button>
-                <button class="btn btn-primary" onclick="generateBiography('both')" style="margin-left: 10px;">
+                <button class="btn btn-primary" onclick="generateBiography()" style="margin-left: 10px;">
                     <i class="fas fa-redo"></i> Try Again
                 </button>
             </div>
@@ -225,117 +229,52 @@ function showBiographyError(message) {
 
 function displayBiographyPreview(data) {
     // Validate data
-    if (!data || (!data.deepseek && !data.claude)) {
+    if (!data || !data.chapters) {
         showBiographyError('No biography data received from server.');
         return;
     }
+    
+    const chapters = data.chapters || [];
     
     // Reset modal content
     const modal = document.getElementById('biography-preview-modal');
     modal.innerHTML = `
         <div class="modal-content biography-preview-content">
             <div class="modal-header">
-                <h2><i class="fas fa-book"></i> Biography Preview - Compare Versions</h2>
+                <h2><i class="fas fa-book"></i> Biography Preview</h2>
                 <button class="close-btn" onclick="closeBiographyPreview()">&times;</button>
             </div>
             
-            <div class="model-selector">
-                <button id="show-deepseek" class="btn btn-secondary active" onclick="showVersion('deepseek')">
-                    <i class="fas fa-robot"></i> DeepSeek Version
-                </button>
-                <button id="show-claude" class="btn btn-secondary" onclick="showVersion('claude')">
-                    <i class="fas fa-brain"></i> Claude Version
-                </button>
-                <button id="show-both" class="btn btn-secondary" onclick="showVersion('both')">
-                    <i class="fas fa-columns"></i> Side by Side
-                </button>
-            </div>
-            
             <div id="biography-content" class="biography-content">
-                <!-- DeepSeek version -->
-                <div id="deepseek-version" class="version-panel">
+                <div id="biography-version" class="version-panel">
                     <div class="version-header">
-                        <h3><i class="fas fa-robot"></i> DeepSeek Generated Biography</h3>
-                        <span class="chapter-count" id="deepseek-count"></span>
+                        <h3><i class="fas fa-robot"></i> AI-Generated Biography</h3>
+                        <span class="chapter-count">${chapters.length} chapter${chapters.length !== 1 ? 's' : ''}</span>
                     </div>
-                    <div id="deepseek-chapters" class="chapters-container"></div>
-                </div>
-                
-                <!-- Claude version -->
-                <div id="claude-version" class="version-panel">
-                    <div class="version-header">
-                        <h3><i class="fas fa-brain"></i> Claude Generated Biography</h3>
-                        <span class="chapter-count" id="claude-count"></span>
-                    </div>
-                    <div id="claude-chapters" class="chapters-container"></div>
+                    <div id="biography-chapters" class="chapters-container"></div>
                 </div>
             </div>
             
             <div class="biography-actions">
                 <div class="action-buttons">
-                    <button class="btn btn-primary" onclick="selectVersion('deepseek')">
-                        <i class="fas fa-check"></i> Use DeepSeek Version
+                    <button class="btn btn-primary" onclick="downloadBiographyPDF()">
+                        <i class="fas fa-download"></i> Download PDF
                     </button>
-                    <button class="btn btn-primary" onclick="selectVersion('claude')">
-                        <i class="fas fa-check"></i> Use Claude Version
-                    </button>
-                    <button class="btn btn-secondary" onclick="regenerateBiography()">
-                        <i class="fas fa-sync"></i> Regenerate Both
+                    <button class="btn btn-secondary" onclick="generateBiography()">
+                        <i class="fas fa-sync"></i> Regenerate
                     </button>
                     <button class="btn btn-secondary" onclick="closeBiographyPreview()">
-                        <i class="fas fa-times"></i> Cancel
+                        <i class="fas fa-times"></i> Close
                     </button>
-                </div>
-                <div class="unsaved-warning" id="unsaved-warning" style="display: none; color: #856404; background: #fff3cd; padding: 10px; border-radius: 4px; margin-top: 10px;">
-                    <i class="fas fa-exclamation-triangle"></i> You have unsaved edits. Save or regenerate to preserve changes.
                 </div>
             </div>
         </div>
     `;
     
-    // Display DeepSeek version
-    if (data.deepseek && !data.deepseek.error) {
-        displayVersion('deepseek', data.deepseek.chapters || []);
-    } else if (data.deepseek && data.deepseek.error) {
-        document.getElementById('deepseek-chapters').innerHTML = `
-            <div class="biography-error">
-                <i class="fas fa-exclamation-triangle"></i>
-                Error: ${escapeHtml(data.deepseek.error)}
-            </div>
-        `;
-    } else {
-        document.getElementById('deepseek-chapters').innerHTML = `
-            <div class="biography-info">
-                <i class="fas fa-info-circle"></i>
-                DeepSeek version not available.
-            </div>
-        `;
-    }
+    // Display chapters
+    displayVersion('biography', chapters);
     
-    // Display Claude version
-    if (data.claude && !data.claude.error) {
-        displayVersion('claude', data.claude.chapters || []);
-    } else if (data.claude && data.claude.error) {
-        document.getElementById('claude-chapters').innerHTML = `
-            <div class="biography-error">
-                <i class="fas fa-exclamation-triangle"></i>
-                Error: ${escapeHtml(data.claude.error)}
-            </div>
-        `;
-    } else {
-        document.getElementById('claude-chapters').innerHTML = `
-            <div class="biography-info">
-                <i class="fas fa-info-circle"></i>
-                Claude version not available.
-            </div>
-        `;
-    }
-    
-    // Update chapter counts
-    updateChapterCounts();
-    
-    // Show both versions by default
-    showVersion('both');
+    modal.style.display = 'flex';
 }
 
 function displayVersion(model, chapters) {
@@ -608,6 +547,49 @@ function validateChapters(chapters) {
     );
 }
 
+async function downloadBiographyPDF() {
+    try {
+        if (!currentBiographyChapters) {
+            alert('No biography chapters available. Please generate biography first.');
+            return;
+        }
+        
+        console.log('Generating PDF...');
+        
+        const response = await fetch('/api/export/biography/pdf', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                chapters: currentBiographyChapters,
+                title: 'The Making of a Life',
+                subtitle: 'A Family Story'
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to generate PDF');
+        }
+        
+        // Get the PDF blob
+        const blob = await response.blob();
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'biography.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        console.log('PDF downloaded successfully!');
+    } catch (error) {
+        console.error('Error downloading PDF:', error);
+        alert('Error generating PDF. Please try again.');
+    }
+}
+
 function regenerateBiography() {
     if (biographyState.hasUnsavedEdits) {
         if (!confirm('You have unsaved edits. Regenerating will lose all changes. Continue?')) {
@@ -615,7 +597,7 @@ function regenerateBiography() {
         }
     }
     
-    generateBiography('both');
+    generateBiography();
 }
 
 function closeBiographyPreview() {
