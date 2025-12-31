@@ -33,6 +33,7 @@ def init_db():
         category TEXT,
         memory_date TEXT,
         year INTEGER,
+        audio_filename TEXT,
         people TEXT,
         places TEXT,
         created_at TEXT

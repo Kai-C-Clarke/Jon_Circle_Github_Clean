@@ -12,11 +12,11 @@ from database import init_db, get_db, migrate_db
 from search_engine import EnhancedSearch
 from ai_search import ai_searcher  # NEW: Import AI search
 from utils import allowed_file, parse_date_input, categorize_memory
-from pdf_generator import generate_memory_pdf, generate_family_album_pdf
+
 from werkzeug.utils import secure_filename
 import uuid
 import traceback
-
+from pdf_generator import generate_memory_pdf, generate_memory_album_pdf
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 CORS(app)
@@ -1343,7 +1343,7 @@ def suggest_all_photos():
 def generate_pdf(pdf_type):
     try:
         if pdf_type == 'album':
-            pdf_path = generate_family_album_pdf()
+            pdf_path = generate_memory_album_pdf()
         else:
             pdf_path = generate_memory_pdf(pdf_type)
         

@@ -272,11 +272,11 @@ def create_custom_styles():
     
     return styles
 
-def generate_family_album_pdf():
-    """Generate magazine-style family album PDF."""
+def generate_memory_album_pdf():
+    """Generate magazine-style memory archive PDF."""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"family_album_{timestamp}.pdf"
+        output_path = f"memory_archive_{timestamp}.pdf"
         
         # Get data from database
         db = get_db()
@@ -317,7 +317,7 @@ def generate_family_album_pdf():
         story.append(Spacer(1, 2.5*inch))
         story.append(Paragraph("The Circle", styles['MagazineTitle']))
         story.append(Spacer(1, 0.2*inch))
-        story.append(Paragraph("Family Memory Album", styles['Tagline']))
+        story.append(Paragraph("Memory Archive", styles['Tagline']))
         story.append(Spacer(1, 0.5*inch))
         story.append(Paragraph(
             f"Created {datetime.now().strftime('%B %d, %Y')}", 
@@ -571,19 +571,19 @@ def generate_family_album_pdf():
 
 def generate_memory_pdf(pdf_type="all"):
     """Backward compatibility wrapper."""
-    return generate_family_album_pdf()
+    return generate_memory_album_pdf()
 
 def generate_simple_pdf():
     """Fallback simple PDF."""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"family_album_simple_{timestamp}.pdf"
+        output_path = f"memory_archive_simple_{timestamp}.pdf"
         
         doc = SimpleDocTemplate(output_path, pagesize=letter)
         story = []
         styles = getSampleStyleSheet()
         
-        story.append(Paragraph("Family Memory Album", styles['Heading1']))
+        story.append(Paragraph("Memory Archive", styles['Heading1']))
         story.append(Spacer(1, 0.5*inch))
         story.append(Paragraph(f"Generated on {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
         
