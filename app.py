@@ -2,7 +2,7 @@
 import os
 from openai import OpenAI
 from anthropic import Anthropic
-from flask import Flask, render_template, jsonify, request, send_file, session
+from flask import Flask, render_template, jsonify, request, send_file, session, Response
 from flask_cors import CORS
 from datetime import datetime
 from ai_photo_matcher import suggest_photos_for_memory, apply_suggestion, suggest_all_memories
@@ -20,6 +20,49 @@ from pdf_generator import generate_memory_pdf, generate_memory_album_pdf
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 CORS(app)
+from functools import wraps
+
+# HTTP Basic Authentication
+def check_auth(username, password):
+    """Validate username and password from environment variables."""
+    valid_username = os.getenv('APP_USERNAME', 'admin')
+    valid_password = os.getenv('APP_PASSWORD', 'changeme')
+    return username == valid_username and password == valid_password
+
+def authenticate():
+    """Send 401 response to trigger browser login."""
+    return Response(
+        'Authentication required. Please log in.',
+        401,
+        {'WWW-Authenticate': 'Basic realm="The Circle - Login Required"'}
+    )
+
+def requires_auth(f):
+    """Decorator to require authentication on routes."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
+        return f(*args, **kwargs)
+    return decorated
+
+# Apply authentication to all routes
+@app.before_request
+def require_authentication():
+    """Require authentication on all routes except static files."""
+    # Skip authentication for static files
+    if request.path.startswith('/static/'):
+        return None
+    
+    # Skip authentication if disabled (for local development)
+    if os.getenv('DISABLE_AUTH', 'false').lower() == 'true':
+        return None
+    
+    # Check authentication
+    auth = request.authorization
+    if not auth or not check_auth(auth.username, auth.password):
+        return authenticate()
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
