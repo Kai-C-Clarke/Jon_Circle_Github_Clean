@@ -1,0 +1,152 @@
+# Render Blueprint for The Circle App
+# Documentation: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: circle-memories-app
+    runtime: python
+    region: oregon  # Choose: oregon, frankfurt, singapore, ohio
+    plan: starter  # $7/month - Required for persistent disk
+    branch: main  # or your main branch name
+
+    # Build & Start Commands
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+
+    # Health Check
+    healthCheckPath: /api/health
+
+    # Environment Variables
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+
+      - key: ENVIRONMENT
+        value: production
+
+      - key: DEBUG
+        value: false
+
+      # Flask Secret Key - Auto-generate on first deploy
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+
+      # JWT Secret Key - Auto-generate on first deploy
+      - key: JWT_SECRET_KEY
+        generateValue: true
+
+      # Database Path - Use persistent disk
+      - key: DATABASE_PATH
+        value: /var/data/circle_memories.db
+
+      # Upload Folder - Use persistent disk
+      - key: UPLOAD_FOLDER
+        value: /var/data/uploads
+
+      # CORS Origins - Update with your actual Render URL after first deploy
+      # Format: https://circle-memories-app.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://circle-memories-app.onrender.com
+
+      # Gunicorn Configuration
+      - key: GUNICORN_WORKERS
+        value: 2
+
+      - key: GUNICORN_TIMEOUT
+        value: 120
+
+      # Logging
+      - key: LOG_LEVEL
+        value: INFO
+
+      - key: LOG_TO_FILE
+        value: false
+
+      # ========================================
+      # IMPORTANT: Set these manually in Render Dashboard
+      # Do NOT commit actual values to Git!
+      # ========================================
+
+      # HTTP Basic Auth (for single-user protection)
+      # Generate password hash:
+      # python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
+      - key: APP_USERNAME
+        sync: false  # Set manually in Render dashboard
+
+      - key: APP_PASSWORD_HASH
+        sync: false  # Set manually in Render dashboard
+
+      # DeepSeek API Key
+      # Get from: https://platform.deepseek.com/api_keys
+      - key: DEEPSEEK_API_KEY
+        sync: false  # Set manually in Render dashboard
+
+      # Anthropic API Key (optional)
+      # Get from: https://console.anthropic.com/
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Set manually in Render dashboard
+
+    # Persistent Disk (REQUIRED for database and uploads)
+    # This prevents data loss on redeploys
+    disk:
+      name: circle-data
+      mountPath: /var/data
+      sizeGB: 1  # 1GB should be sufficient for single user
+
+    # Auto-deploy when pushing to branch
+    autoDeploy: true
+
+# =============================================================================
+# Post-Deployment Setup Instructions
+# =============================================================================
+#
+# 1. After first deployment, update ALLOWED_ORIGINS:
+#    - Go to Render Dashboard > Environment
+#    - Update ALLOWED_ORIGINS with your actual URL
+#    - Example: https://circle-memories-app.onrender.com
+#
+# 2. Set required secret environment variables in Render Dashboard:
+#    - APP_USERNAME (e.g., "guypalmer")
+#    - APP_PASSWORD_HASH (generate using werkzeug.security)
+#    - DEEPSEEK_API_KEY (from DeepSeek platform)
+#    - ANTHROPIC_API_KEY (optional, from Anthropic)
+#
+# 3. Verify persistent disk is mounted:
+#    - Check Render logs: "Disk mounted at /var/data"
+#    - SSH into instance: ls -la /var/data
+#
+# 4. Test the deployment:
+#    - Visit: https://your-app.onrender.com
+#    - Check health endpoint: https://your-app.onrender.com/api/health
+#    - Test authentication (should prompt for username/password)
+#
+# 5. Monitor the app:
+#    - Check Render Dashboard > Logs
+#    - Set up alerts for errors
+#    - Monitor disk usage (1GB limit)
+#
+# =============================================================================
+# Troubleshooting
+# =============================================================================
+#
+# Database not persisting after redeploy:
+#   - Ensure persistent disk is enabled (Starter plan minimum)
+#   - Check DATABASE_PATH points to /var/data/circle_memories.db
+#   - Verify disk is mounted in logs
+#
+# File uploads failing:
+#   - Check UPLOAD_FOLDER points to /var/data/uploads
+#   - Verify disk has sufficient space
+#   - Check file size limits (50MB default)
+#
+# Authentication not working:
+#   - Verify APP_USERNAME and APP_PASSWORD_HASH are set
+#   - Check password hash was generated correctly
+#   - Review auth middleware implementation
+#
+# AI features not working:
+#   - Verify DEEPSEEK_API_KEY is set correctly
+#   - Check API key has sufficient credits
+#   - Review logs for API errors
+#
+# =============================================================================
