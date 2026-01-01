@@ -23,10 +23,13 @@ CORS(app)
 from functools import wraps
 from database import get_db
 
-db = get_db()
-with open('chat_migration.sql', 'r') as f:
-    db.executescript(f.read())
-db.commit()
+try:
+    with open('chat_migration.sql', 'r') as f:
+        migration_sql = f.read()
+    db.executescript(migration_sql)
+    db.commit()
+except FileNotFoundError:
+    pass  # Skip migration if file doesn't exist
 
 # HTTP Basic Authentication
 def check_auth(username, password):
