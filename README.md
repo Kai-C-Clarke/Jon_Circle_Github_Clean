@@ -92,14 +92,9 @@ Open your browser to: **http://localhost:5000**
 
    ```bash
    APP_USERNAME=guypalmer
-   APP_PASSWORD_HASH=<generate-this>
+   APP_PASSWORD=<your-secure-password>
    DEEPSEEK_API_KEY=<your-api-key>
    ANTHROPIC_API_KEY=<your-api-key>
-   ```
-
-   To generate password hash:
-   ```bash
-   python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password_here'))"
    ```
 
 4. **Update CORS:**
@@ -125,9 +120,11 @@ Open your browser to: **http://localhost:5000**
 ### Authentication
 
 The app uses **HTTP Basic Authentication** for single-user access:
-- Set `APP_USERNAME` and `APP_PASSWORD_HASH` in environment variables
-- The app will prompt for credentials when accessing any page
-- Sessions are maintained securely with HTTPS
+- Set `APP_USERNAME` and `APP_PASSWORD` in environment variables
+- The browser will prompt for credentials when accessing protected pages
+- Authentication is required for `/app` and all `/api/*` routes (except `/api/health`)
+- Landing page (`/`) and goodbye page remain public
+- To disable auth for local development: set `DISABLE_AUTH=true` in `.env`
 
 ### Privacy Considerations
 
@@ -185,8 +182,9 @@ Key variables:
 - `FLASK_SECRET_KEY` - Flask session encryption (required)
 - `DEEPSEEK_API_KEY` - DeepSeek AI API key (required for AI features)
 - `ANTHROPIC_API_KEY` - Anthropic/Claude API key (optional)
-- `APP_USERNAME` - HTTP Basic Auth username
-- `APP_PASSWORD_HASH` - HTTP Basic Auth password hash
+- `APP_USERNAME` - HTTP Basic Auth username (e.g., "guypalmer")
+- `APP_PASSWORD` - HTTP Basic Auth password (plain text, secured via HTTPS)
+- `DISABLE_AUTH` - Set to "true" to disable auth (development only)
 - `ALLOWED_ORIGINS` - CORS allowed origins
 - `DATABASE_PATH` - Database file location
 - `UPLOAD_FOLDER` - Upload directory location

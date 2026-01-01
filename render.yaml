@@ -68,13 +68,12 @@ services:
       # ========================================
 
       # HTTP Basic Auth (for single-user protection)
-      # Generate password hash:
-      # python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
+      # Simple username and password authentication
       - key: APP_USERNAME
-        sync: false  # Set manually in Render dashboard
+        sync: false  # Set manually in Render dashboard (e.g., "guypalmer")
 
-      - key: APP_PASSWORD_HASH
-        sync: false  # Set manually in Render dashboard
+      - key: APP_PASSWORD
+        sync: false  # Set manually in Render dashboard (secure password)
 
       # DeepSeek API Key
       # Get from: https://platform.deepseek.com/api_keys
@@ -107,7 +106,7 @@ services:
 #
 # 2. Set required secret environment variables in Render Dashboard:
 #    - APP_USERNAME (e.g., "guypalmer")
-#    - APP_PASSWORD_HASH (generate using werkzeug.security)
+#    - APP_PASSWORD (secure password of your choice)
 #    - DEEPSEEK_API_KEY (from DeepSeek platform)
 #    - ANTHROPIC_API_KEY (optional, from Anthropic)
 #

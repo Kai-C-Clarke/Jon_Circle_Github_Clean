@@ -4,6 +4,8 @@ from openai import OpenAI
 from anthropic import Anthropic
 from flask import Flask, render_template, jsonify, request, send_file, session
 from flask_cors import CORS
+from flask_httpauth import HTTPBasicAuth
+from werkzeug.security import check_password_hash
 from datetime import datetime
 from ai_photo_matcher import suggest_photos_for_memory, apply_suggestion, suggest_all_memories
 
@@ -17,9 +19,47 @@ from werkzeug.utils import secure_filename
 import uuid
 import traceback
 from pdf_generator import generate_memory_pdf, generate_memory_album_pdf
+
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
-CORS(app)
+
+# Configure CORS with restricted origins
+allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:5000').split(',')
+CORS(app, resources={r"/*": {"origins": allowed_origins}})
+
+# ============================================
+# HTTP BASIC AUTHENTICATION
+# ============================================
+auth = HTTPBasicAuth()
+
+# Check if authentication should be disabled (for development)
+AUTH_ENABLED = os.getenv('DISABLE_AUTH', 'false').lower() != 'true'
+
+@auth.verify_password
+def verify_password(username, password):
+    """Verify username and password for HTTP Basic Auth."""
+    if not AUTH_ENABLED:
+        return True  # Auth disabled for development
+
+    expected_username = os.getenv('APP_USERNAME')
+    expected_password = os.getenv('APP_PASSWORD')
+
+    # If credentials not set, deny access
+    if not expected_username or not expected_password:
+        print("⚠️ WARNING: APP_USERNAME or APP_PASSWORD not set in environment!")
+        return False
+
+    # Simple username check and password comparison
+    if username == expected_username and password == expected_password:
+        return True
+
+    return False
+
+def auth_required(f):
+    """Decorator to require authentication on routes."""
+    if AUTH_ENABLED:
+        return auth.login_required(f)
+    return f
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -231,18 +271,23 @@ def parse_biography_into_chapters(narrative_text):
 
 @app.route('/')
 def landing():
+    """Public landing page."""
     return render_template('landing.html')
 
 @app.route('/app')
+@auth_required
 def main_app():
+    """Main application - requires authentication."""
     return render_template('index.html')
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
+    """Public health check endpoint for Render monitoring."""
     return jsonify({
-        "status": "healthy", 
+        "status": "healthy",
         "time": datetime.now().isoformat(),
-        "ai_search": ai_searcher.client is not None
+        "ai_search": ai_searcher.client is not None,
+        "auth_enabled": AUTH_ENABLED
     })
 
 @app.route('/goodbye')
@@ -255,6 +300,7 @@ def goodbye():
 # ============================================
 
 @app.route('/api/profile/save', methods=['POST'])
+@auth_required
 def save_profile():
     try:
         data = request.json
@@ -274,6 +320,7 @@ def save_profile():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/profile/get', methods=['GET'])
+@auth_required
 def get_profile():
     try:
         db = get_db()
@@ -299,6 +346,7 @@ def get_profile():
 # ============================================
 
 @app.route('/api/memories/save', methods=['POST'])
+@auth_required
 def save_memory():
     """Save a new memory with optional audio recording."""
     try:
@@ -366,6 +414,7 @@ def save_memory():
         return jsonify({"status": "error", "message": "Failed to save memory"}), 500
 
 @app.route('/api/memories/delete/<int:memory_id>', methods=['DELETE'])
+@auth_required
 def delete_memory(memory_id):
     """Delete a memory and its associated audio file."""
     try:
@@ -413,6 +462,7 @@ def delete_memory(memory_id):
         return jsonify({"status": "error", "message": "Failed to delete memory"}), 500
 
 @app.route('/api/memories/get', methods=['GET'])
+@auth_required
 def get_memories():
     """Get all memories for the timeline."""
     try:
@@ -778,6 +828,7 @@ def serve_audio(filename):
         return jsonify({"status": "error", "message": "Failed to serve audio"}), 404
 
 @app.route('/api/media/upload', methods=['POST'])
+@auth_required
 def upload_media():
     try:
         if 'media' not in request.files:
@@ -863,6 +914,7 @@ def upload_media():
         return jsonify({"status": "error", "message": "Failed to upload file"}), 500
 
 @app.route('/api/export/biography/generate', methods=['POST'])
+@auth_required
 def generate_biography_draft():
     """Generate biography using DeepSeek and auto-save to session."""
     try:
@@ -1029,6 +1081,7 @@ def generate_biography_pdf_route():
         }), 500
 
 @app.route('/uploads/<filename>')
+@auth_required
 def serve_uploaded_file(filename):
     """Serve uploaded files directly."""
     try:
@@ -1398,8 +1451,12 @@ if __name__ == '__main__':
     print("THE CIRCLE - Family Memory Preservation App")
     print("="*60)
     print(f"Local URL: http://localhost:5000")
+    print(f"Authentication: {'ENABLED ✓' if AUTH_ENABLED else 'DISABLED (dev mode)'}")
+    if AUTH_ENABLED and not (os.getenv('APP_USERNAME') and os.getenv('APP_PASSWORD')):
+        print("⚠️  WARNING: Authentication enabled but credentials not set!")
+        print("   Set APP_USERNAME and APP_PASSWORD in .env file")
     print(f"AI Search: {'ENABLED' if ai_searcher.client else 'DISABLED (set DEEPSEEK_API_KEY)'}")
     print("="*60)
     print("Press Ctrl+C to stop the server\n")
-    
+
     app.run(debug=True, port=5000)
