@@ -2,8 +2,7 @@
 import sqlite3
 import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'circle_memories.db')
+DB_PATH = os.getenv('DATABASE_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'circle_memories.db'))
 
 def get_db():
     """Get a database connection."""
