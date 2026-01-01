@@ -21,6 +21,12 @@ app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 CORS(app)
 from functools import wraps
+from database import get_db
+
+db = get_db()
+with open('chat_migration.sql', 'r') as f:
+    db.executescript(f.read())
+db.commit()
 
 # HTTP Basic Authentication
 def check_auth(username, password):
@@ -1036,6 +1042,7 @@ def generate_biography_pdf_route():
             }), 400
         
         # Import the generator functions
+        # Import the generator functions
         try:
             from biography_pdf_generator import generate_biography_pdf
         except ImportError as e:
@@ -1045,13 +1052,17 @@ def generate_biography_pdf_route():
                 'message': 'PDF generation module not available'
             }), 500
         
-        # Generate PDF
+        # Get database connection
+        db = get_db()
+        
+        # Generate PDF WITH database connection
         pdf_buffer = generate_biography_pdf(
             chapters,
             title,
             subtitle,
             UPLOAD_FOLDER,
-            hero_photo=None
+            hero_photo=None,
+            db_connection=db
         )
         
         filename = f'family_biography_{title.replace(" ", "_").lower()}.pdf'
@@ -1199,7 +1210,7 @@ def media_preview(filename):
 
 @app.route('/api/media/<int:media_id>/update', methods=['PUT'])
 def update_media(media_id):
-    """Update media title and description."""
+    """Update media metadata including title, description, year, memory_date, and people."""
     try:
         data = request.json
         if not data:
@@ -1223,6 +1234,28 @@ def update_media(media_id):
             updates.append("description = ?")
             values.append(data['description'].strip())
         
+        # NEW: Support for year, memory_date, and people
+        if 'year' in data:
+            year = data['year']
+            # Allow empty string to clear the field
+            if year == '':
+                updates.append("year = NULL")
+            else:
+                try:
+                    year_int = int(year) if year else None
+                    updates.append("year = ?")
+                    values.append(year_int)
+                except (ValueError, TypeError):
+                    return jsonify({"status": "error", "message": "Invalid year format"}), 400
+        
+        if 'memory_date' in data:
+            updates.append("memory_date = ?")
+            values.append(data['memory_date'].strip() if data['memory_date'] else None)
+        
+        if 'people' in data:
+            updates.append("people = ?")
+            values.append(data['people'].strip() if data['people'] else None)
+        
         if not updates:
             return jsonify({"status": "error", "message": "Nothing to update"}), 400
         
@@ -1239,13 +1272,15 @@ def update_media(media_id):
         
         return jsonify({
             "status": "success",
-            "message": "Media updated successfully",
-            "updates": data
+            "message": "Media updated successfully"
         })
         
     except Exception as e:
-        print(f"Update media error: {e}")
-        return jsonify({"status": "error", "message": "Failed to update media"}), 500
+        print(f"Error updating media: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 
 # ============================================
 # AI PHOTO MATCHING ROUTES
@@ -1431,6 +1466,145 @@ def internal_error(error):
 @app.errorhandler(413)
 def request_entity_too_large(error):
     return jsonify({"status": "error", "message": "File too large"}), 413
+
+# ============================================
+# GENERAL CHAT FEATURE
+# ============================================
+
+def get_chat_session_id():
+    """Get or create a chat session ID"""
+    if 'chat_session_id' not in session:
+        session['chat_session_id'] = str(uuid.uuid4())
+    return session['chat_session_id']
+
+def save_chat_message(session_id, role, message, tokens_used=0):
+    """Save a chat message to database"""
+    db = get_db()
+    cursor = db.cursor()
+    
+    cursor.execute("""
+        INSERT INTO chat_messages (session_id, role, message, tokens_used)
+        VALUES (?, ?, ?, ?)
+    """, (session_id, role, message, tokens_used))
+    
+    db.commit()
+
+def get_chat_history(session_id, limit=50):
+    """Retrieve recent chat history for context"""
+    db = get_db()
+    cursor = db.cursor()
+    
+    cursor.execute("""
+        SELECT role, message, timestamp
+        FROM chat_messages
+        WHERE session_id = ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+    """, (session_id, limit))
+    
+    messages = cursor.fetchall()
+    return [
+        {
+            'role': msg[0],
+            'content': msg[1],
+            'timestamp': msg[2]
+        }
+        for msg in reversed(messages)
+    ]
+
+@app.route('/chat')
+def chat_page():
+    """Render chat interface"""
+    return render_template('chat.html')
+
+@app.route('/api/chat/send', methods=['POST'])
+def chat_send():
+    """Send message and get AI response"""
+    try:
+        data = request.json
+        user_message = data.get('message', '').strip()
+        
+        if not user_message:
+            return jsonify({'error': 'Empty message'}), 400
+        
+        session_id = get_chat_session_id()
+        save_chat_message(session_id, 'user', user_message)
+        
+        history = get_chat_history(session_id, limit=20)
+        
+        messages = [
+            {
+                'role': 'system',
+                'content': '''You are a thoughtful AI companion in The Circle, a memory preservation app. 
+
+Your role is to:
+- Have natural, friendly conversations
+- Help users reflect on their experiences
+- Ask thoughtful follow-up questions
+- Remember context from the conversation
+- Gently encourage users to share stories worth preserving
+
+Keep responses conversational and warm, not formal or robotic.'''
+            }
+        ]
+        
+        for msg in history:
+            messages.append({
+                'role': msg['role'],
+                'content': msg['content']
+            })
+        
+        # Use DeepSeek
+        client = OpenAI(
+            api_key=os.getenv('DEEPSEEK_API_KEY'),
+            base_url="https://api.deepseek.com"
+        )
+        
+        response = client.chat.completions.create(
+            model='deepseek-chat',
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        ai_message = response.choices[0].message.content
+        tokens_used = response.usage.total_tokens
+        
+        save_chat_message(session_id, 'assistant', ai_message, tokens_used)
+        
+        return jsonify({
+            'message': ai_message,
+            'timestamp': datetime.now().isoformat(),
+            'tokens_used': tokens_used
+        })
+        
+    except Exception as e:
+        print(f"Chat error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/history')
+def chat_history():
+    """Get chat history for current session"""
+    session_id = get_chat_session_id()
+    history = get_chat_history(session_id, limit=100)
+    
+    return jsonify({
+        'messages': history,
+        'session_id': session_id
+    })
+
+@app.route('/api/chat/new-session', methods=['POST'])
+def new_chat_session():
+    """Start a new chat session"""
+    session['chat_session_id'] = str(uuid.uuid4())
+    
+    return jsonify({
+        'session_id': session['chat_session_id'],
+        'message': 'New session started'
+    })
+
 
 # ============================================
 # MAIN

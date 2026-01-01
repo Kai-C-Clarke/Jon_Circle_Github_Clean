@@ -846,17 +846,20 @@ class BiographyPDFGenerator:
 
 # Legacy function for backward compatibility
 def generate_biography_pdf(chapters: List[Dict[str, Any]], title: str, subtitle: str, 
-                          upload_folder: str, hero_photo: Optional[str] = None) -> BytesIO:
+                          upload_folder: str, hero_photo: Optional[str] = None, 
+                          db_connection=None) -> BytesIO:
     """Legacy function for backward compatibility."""
     
-    # Get database connection
-    db_connection = None
-    try:
-        db_path = os.getenv('DATABASE_PATH', 'circle_memories.db')
-        if os.path.exists(db_path):
-            db_connection = sqlite3.connect(db_path)
-    except Exception as e:
-        logger.warning(f"Could not connect to database: {e}")
+    # Use provided connection or create new one
+    should_close = False
+    if db_connection is None:
+        try:
+            db_path = os.getenv('DATABASE_PATH', 'circle_memories.db')
+            if os.path.exists(db_path):
+                db_connection = sqlite3.connect(db_path)
+                should_close = True
+        except Exception as e:
+            logger.warning(f"Could not connect to database: {e}")
     
     # Extract family names from chapters
     family_names = []
@@ -881,7 +884,8 @@ def generate_biography_pdf(chapters: List[Dict[str, Any]], title: str, subtitle:
             family_names=family_names
         )
     finally:
-        if db_connection:
+        # Only close if we created the connection
+        if should_close and db_connection:
             db_connection.close()
 
 

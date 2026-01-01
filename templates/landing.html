@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Circle - Memory Archive</title>
+    <title>The Circle</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Text:ital@0;1&display=swap" rel="stylesheet">
     <style>
         * {
@@ -67,165 +67,143 @@
             z-index: 2;
         }
 
-        .content {
+        /* Concentric Circles Container */
+        .circles-container {
             position: relative;
             z-index: 10;
-            text-align: center;
-            padding: 2.5rem 3rem;
-            background: rgb(255, 255, 255);
-            border-radius: 20px;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-            max-width: 550px;
-            animation: fadeIn 1.5s ease-in;
-            border: 2px solid rgba(212, 168, 73, 0.3);
+            width: 350px;
+            height: 350px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        /* The three concentric circles */
+        .circle {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid rgba(212, 168, 73, 0.6);
+            pointer-events: none;
         }
 
-        h1 {
-            font-family: 'Cinzel', serif;
-            font-size: 4rem;
-            color: #8B4513;
-            margin-bottom: 1rem;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
-            letter-spacing: 2px;
+        .circle-outer {
+            width: 350px;
+            height: 350px;
+            opacity: 0.3;
         }
 
-        .tagline {
-            font-size: 1.4rem;
-            color: #654321;
-            margin-bottom: 2.5rem;
-            font-style: italic;
-            line-height: 1.6;
+        .circle-middle {
+            width: 250px;
+            height: 250px;
+            opacity: 0.5;
         }
 
-        .enter-btn {
-            background: linear-gradient(135deg, #E8B44F 0%, #D4A849 100%);
-            color: white;
+        .circle-inner {
+            width: 150px;
+            height: 150px;
+            opacity: 0.7;
+        }
+
+        /* Begin Button */
+        .begin-btn {
+            position: relative;
+            z-index: 11;
+            background: transparent;
+            color: #D4A849;
             border: none;
-            padding: 1.2rem 3.5rem;
-            font-size: 1.5rem;
+            font-size: 2.5rem;
             font-family: 'Cinzel', serif;
-            border-radius: 50px;
+            font-weight: 400;
             cursor: pointer;
-            box-shadow: 0 6px 20px rgba(232, 180, 79, 0.4);
+            padding: 0;
             transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-weight: 600;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
         }
 
-        .enter-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(232, 180, 79, 0.6);
-            background: linear-gradient(135deg, #F0C461 0%, #E8B44F 100%);
+        .begin-btn:hover {
+            color: #E8B44F;
+            transform: scale(1.1);
+            text-shadow: 3px 3px 12px rgba(0, 0, 0, 0.7);
         }
 
-        .enter-btn:active {
-            transform: translateY(-1px);
+        .begin-btn:active {
+            transform: scale(0.98);
         }
 
-        /* Leaf accent removed for workshop theme */
-        .leaf-accent {
-            display: none;
+        /* Ripple Effect */
+        .ripple {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 3px solid rgba(212, 168, 73, 0.8);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9;
         }
 
-        @keyframes float {
-            0%, 100% {
-                transform: translateY(0px) rotate(0deg);
-            }
-            50% {
-                transform: translateY(-20px) rotate(5deg);
-            }
+        .ripple.active {
+            animation: ripple-expand 3s ease-out;
         }
 
-        .falling-leaf {
-            display: none;
-        }
-
-        @keyframes fall {
+        @keyframes ripple-expand {
             0% {
-                transform: translateY(-100px) rotate(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 0.7;
-            }
-            90% {
-                opacity: 0.7;
+                width: 150px;
+                height: 150px;
+                opacity: 0.9;
+                border-width: 3px;
             }
             100% {
-                transform: translateY(100vh) rotate(360deg);
+                width: 800px;
+                height: 800px;
                 opacity: 0;
+                border-width: 1px;
             }
         }
 
-        .leaf-1 {
-            left: 10%;
-            animation-duration: 12s;
-            animation-delay: 0s;
+        /* Page Transition */
+        .transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, transparent 0%, rgba(212, 168, 73, 0.3) 50%, rgba(0, 0, 0, 0.9) 100%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 100;
+            transition: opacity 3s ease-in;
         }
 
-        .leaf-2 {
-            left: 30%;
-            animation-duration: 15s;
-            animation-delay: 3s;
-            background: #D4A849;
+        .transition-overlay.active {
+            opacity: 1;
         }
 
-        .leaf-3 {
-            left: 50%;
-            animation-duration: 18s;
-            animation-delay: 6s;
-        }
-
-        .leaf-4 {
-            left: 70%;
-            animation-duration: 14s;
-            animation-delay: 2s;
-            background: #C9A043;
-        }
-
-        .leaf-5 {
-            left: 90%;
-            animation-duration: 16s;
-            animation-delay: 5s;
-        }
-
+        /* Mobile Responsiveness */
         @media (max-width: 768px) {
-            h1 {
-                font-size: 3rem;
+            .circles-container {
+                width: 250px;
+                height: 250px;
             }
 
-            .tagline {
-                font-size: 1.2rem;
-                margin-bottom: 2rem;
+            .circle-outer {
+                width: 250px;
+                height: 250px;
             }
 
-            .enter-btn {
-                padding: 1rem 2.5rem;
-                font-size: 1.3rem;
+            .circle-middle {
+                width: 180px;
+                height: 180px;
             }
 
-            .content {
-                max-width: 90%;
-                padding: 1.5rem;
+            .circle-inner {
+                width: 110px;
+                height: 110px;
             }
 
-            .leaf-accent {
-                width: 120px;
-                height: 120px;
-                bottom: 20px;
-                right: 20px;
+            .begin-btn {
+                font-size: 2rem;
             }
         }
     </style>
@@ -233,26 +211,43 @@
 <body>
     <div class="hero">
         <img src="{{ url_for('static', filename='landing-bg.jpg') }}" alt="The Circle Community" class="hero-image">
-        
-        <div class="falling-leaf leaf-1"></div>
-        <div class="falling-leaf leaf-2"></div>
-        <div class="falling-leaf leaf-3"></div>
-        <div class="falling-leaf leaf-4"></div>
-        <div class="falling-leaf leaf-5"></div>
 
-        <div class="content">
-            <h1>The Circle</h1>
-            <p class="tagline">Preserve your stories,<br>share your journey</p>
-            <button class="enter-btn" onclick="enterApp()">Enter</button>
+        <div class="circles-container">
+            <div class="circle circle-outer"></div>
+            <div class="circle circle-middle"></div>
+            <div class="circle circle-inner"></div>
+            
+            <button class="begin-btn" onclick="enterApp()">Begin</button>
+            
+            <div class="ripple" id="ripple1"></div>
+            <div class="ripple" id="ripple2"></div>
+            <div class="ripple" id="ripple3"></div>
         </div>
-
-        <div class="leaf-accent"></div>
     </div>
+
+    <div class="transition-overlay" id="transition"></div>
 
     <script>
         function enterApp() {
-            // Replace 'app.html' with your actual main app page
-            window.location.href = 'app';
+            // Trigger ripple animations (staggered)
+            const ripples = ['ripple1', 'ripple2', 'ripple3'];
+            
+            ripples.forEach((id, index) => {
+                setTimeout(() => {
+                    const ripple = document.getElementById(id);
+                    ripple.classList.add('active');
+                }, index * 400); // Slower stagger for 3-second ripple
+            });
+            
+            // Start page transition overlay
+            setTimeout(() => {
+                document.getElementById('transition').classList.add('active');
+            }, 500);
+            
+            // Navigate after ripple dissolve completes
+            setTimeout(() => {
+                window.location.href = 'app';
+            }, 5000);
         }
     </script>
 </body>

@@ -449,51 +449,99 @@ class MediaManager {
             let mediaElement = '';
             const fileType = item.file_type?.split('/')[0] || item.file_type || 'document';
             
-            if (fileType.startsWith('image')) {
-                mediaElement = `
-                    <div class="media-item image" data-id="${item.id}">
-                        <div class="media-thumbnail">
-                            <img src="/uploads/${item.filename}" alt="${item.title || item.original_filename}" 
-                                 loading="lazy" data-url="/uploads/${item.filename}">
-                            <div class="media-overlay">
-                                <button class="media-view" title="View full size">
-                                    <i class="fas fa-expand"></i>
-                                </button>
-                                <button class="media-edit" data-id="${item.id}" title="Edit details">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="media-delete" data-id="${item.id}" title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="media-info">
-                            <div class="editable-title">
-                                <h4 class="title-display">${item.title || item.original_filename}</h4>
-                                <input type="text" class="title-edit" value="${item.title || item.original_filename}" 
-                                       style="display: none;" data-original="${item.title || item.original_filename}">
-                                <button class="save-title-btn" data-id="${item.id}" style="display: none;">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                                <button class="cancel-title-btn" style="display: none;">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                            <div class="editable-description">
-                                <p class="description-display">${item.description || 'No description'}</p>
-                                <textarea class="description-edit" style="display: none;" 
-                                          placeholder="Add a description...">${item.description || ''}</textarea>
-                                <button class="save-description-btn" data-id="${item.id}" style="display: none;">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                                <button class="cancel-description-btn" style="display: none;">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                            <small>${this.formatFileSize(item.file_size)} • ${new Date(item.created_at).toLocaleDateString()}</small>
-                        </div>
-                    </div>
-                `;
+// UPDATED MEDIA ITEM HTML - Replace lines 454-491 in media.js
+// This version includes year, memory_date, and people fields
+
+if (fileType.startsWith('image')) {
+    mediaElement = `
+        <div class="media-item image" data-id="${item.id}">
+            <div class="media-thumbnail">
+                <img src="/uploads/${item.filename}" alt="${item.title || item.original_filename}" 
+                     loading="lazy" data-url="/uploads/${item.filename}">
+                <div class="media-overlay">
+                    <button class="media-view" title="View full size">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="media-edit" data-id="${item.id}" title="Edit details">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="media-delete" data-id="${item.id}" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="media-info">
+                <!-- Title editing -->
+                <div class="editable-title">
+                    <h4 class="title-display">${item.title || item.original_filename}</h4>
+                    <input type="text" class="title-edit" value="${item.title || item.original_filename}" 
+                           style="display: none;" data-original="${item.title || item.original_filename}">
+                    <button class="save-title-btn" data-id="${item.id}" style="display: none;">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="cancel-title-btn" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <!-- Description editing -->
+                <div class="editable-description">
+                    <p class="description-display">${item.description || 'No description'}</p>
+                    <textarea class="description-edit" style="display: none;" 
+                              placeholder="Add a description...">${item.description || ''}</textarea>
+                    <button class="save-description-btn" data-id="${item.id}" style="display: none;">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="cancel-description-btn" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <!-- NEW: Year editing -->
+                <div class="editable-year">
+                    <p class="year-display"><i class="fas fa-calendar"></i> Year: ${item.year || 'Not set'}</p>
+                    <input type="number" class="year-edit" value="${item.year || ''}" 
+                           min="1900" max="2100" placeholder="Year"
+                           style="display: none;" data-original="${item.year || ''}">
+                    <button class="save-year-btn" data-id="${item.id}" style="display: none;">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="cancel-year-btn" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <!-- NEW: People editing -->
+                <div class="editable-people">
+                    <p class="people-display"><i class="fas fa-users"></i> People: ${item.people || 'Not set'}</p>
+                    <input type="text" class="people-edit" value="${item.people || ''}" 
+                           placeholder="Names of people in this media"
+                           style="display: none;" data-original="${item.people || ''}">
+                    <button class="save-people-btn" data-id="${item.id}" style="display: none;">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="cancel-people-btn" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <!-- NEW: Memory Date editing -->
+                <div class="editable-memory-date">
+                    <p class="memory-date-display"><i class="fas fa-clock"></i> Date: ${item.memory_date || 'Not set'}</p>
+                    <input type="date" class="memory-date-edit" value="${item.memory_date || ''}" 
+                           style="display: none;" data-original="${item.memory_date || ''}">
+                    <button class="save-memory-date-btn" data-id="${item.id}" style="display: none;">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="cancel-memory-date-btn" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <small>${this.formatFileSize(item.file_size)} • Uploaded: ${new Date(item.created_at).toLocaleDateString()}</small>
+            </div>
+        </div>
+    `;
             } else if (fileType.startsWith('audio')) {
                 mediaElement = `
                     <div class="media-item audio" data-id="${item.id}">
@@ -626,7 +674,6 @@ class MediaManager {
                 }
             });
         });
-        
         // View buttons for lightbox (images only)
         this.mediaGallery.querySelectorAll('.media-view').forEach(btn => {
             if (btn.closest('.image')) {
@@ -666,6 +713,30 @@ class MediaManager {
                 this.enableDescriptionEditing(mediaItem);
             });
         });
+
+        // Year editing (double-click)
+        this.mediaGallery.querySelectorAll('.year-display').forEach(yearDisplay => {
+            yearDisplay.addEventListener('dblclick', (e) => {
+                const mediaItem = e.target.closest('.media-item');
+                this.enableYearEditing(mediaItem);
+            });
+        });
+
+        // People editing (double-click)
+        this.mediaGallery.querySelectorAll('.people-display').forEach(peopleDisplay => {
+            peopleDisplay.addEventListener('dblclick', (e) => {
+                const mediaItem = e.target.closest('.media-item');
+                this.enablePeopleEditing(mediaItem);
+            });
+        });
+
+        // Memory Date editing (double-click)
+        this.mediaGallery.querySelectorAll('.memory-date-display').forEach(dateDisplay => {
+            dateDisplay.addEventListener('dblclick', (e) => {
+                const mediaItem = e.target.closest('.media-item');
+                this.enableMemoryDateEditing(mediaItem);
+            });
+        });
     }
     
     // ============ EDITING METHODS ============
@@ -673,7 +744,10 @@ class MediaManager {
     enableEditing(mediaItem) {
         this.enableTitleEditing(mediaItem);
         this.enableDescriptionEditing(mediaItem);
-    }
+        this.enableYearEditing(mediaItem);
+        this.enablePeopleEditing(mediaItem);
+        this.enableMemoryDateEditing(mediaItem);
+}
     
     enableTitleEditing(mediaItem) {
         const titleDisplay = mediaItem.querySelector('.title-display');
@@ -729,6 +803,81 @@ class MediaManager {
         }
     }
     
+    enableYearEditing(mediaItem) {
+        const yearDisplay = mediaItem.querySelector('.year-display');
+        const yearEdit = mediaItem.querySelector('.year-edit');
+        const saveBtn = mediaItem.querySelector('.save-year-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-year-btn');
+        
+        if (yearDisplay && yearEdit) {
+            yearDisplay.style.display = 'none';
+            yearEdit.style.display = 'block';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+            
+            yearEdit.focus();
+            yearEdit.select();
+            
+            yearEdit.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.saveYear(mediaItem);
+                } else if (e.key === 'Escape') {
+                    this.cancelYearEditing(mediaItem);
+                }
+            });
+            
+            saveBtn.onclick = () => this.saveYear(mediaItem);
+            cancelBtn.onclick = () => this.cancelYearEditing(mediaItem);
+        }
+    }
+
+    enablePeopleEditing(mediaItem) {
+        const peopleDisplay = mediaItem.querySelector('.people-display');
+        const peopleEdit = mediaItem.querySelector('.people-edit');
+        const saveBtn = mediaItem.querySelector('.save-people-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-people-btn');
+        
+        if (peopleDisplay && peopleEdit) {
+            peopleDisplay.style.display = 'none';
+            peopleEdit.style.display = 'block';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+            
+            peopleEdit.focus();
+            peopleEdit.select();
+            
+            peopleEdit.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.savePeople(mediaItem);
+                } else if (e.key === 'Escape') {
+                    this.cancelPeopleEditing(mediaItem);
+                }
+            });
+            
+            saveBtn.onclick = () => this.savePeople(mediaItem);
+            cancelBtn.onclick = () => this.cancelPeopleEditing(mediaItem);
+        }
+    }
+
+    enableMemoryDateEditing(mediaItem) {
+        const dateDisplay = mediaItem.querySelector('.memory-date-display');
+        const dateEdit = mediaItem.querySelector('.memory-date-edit');
+        const saveBtn = mediaItem.querySelector('.save-memory-date-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-memory-date-btn');
+        
+        if (dateDisplay && dateEdit) {
+            dateDisplay.style.display = 'none';
+            dateEdit.style.display = 'block';
+            saveBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+            
+            dateEdit.focus();
+            
+            saveBtn.onclick = () => this.saveMemoryDate(mediaItem);
+            cancelBtn.onclick = () => this.cancelMemoryDateEditing(mediaItem);
+        }
+    }
+    
     cancelTitleEditing(mediaItem) {
         const titleDisplay = mediaItem.querySelector('.title-display');
         const titleEdit = mediaItem.querySelector('.title-edit');
@@ -755,6 +904,53 @@ class MediaManager {
         saveBtn.style.display = 'none';
         cancelBtn.style.display = 'none';
     }
+
+
+    cancelYearEditing(mediaItem) {
+        const yearDisplay = mediaItem.querySelector('.year-display');
+        const yearEdit = mediaItem.querySelector('.year-edit');
+        const saveBtn = mediaItem.querySelector('.save-year-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-year-btn');
+        
+        const originalValue = yearEdit.dataset.original;
+        yearEdit.value = originalValue;
+        
+        yearDisplay.style.display = 'block';
+        yearEdit.style.display = 'none';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+
+    cancelPeopleEditing(mediaItem) {
+        const peopleDisplay = mediaItem.querySelector('.people-display');
+        const peopleEdit = mediaItem.querySelector('.people-edit');
+        const saveBtn = mediaItem.querySelector('.save-people-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-people-btn');
+        
+        const originalValue = peopleEdit.dataset.original;
+        peopleEdit.value = originalValue;
+        
+        peopleDisplay.style.display = 'block';
+        peopleEdit.style.display = 'none';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+
+    cancelMemoryDateEditing(mediaItem) {
+        const dateDisplay = mediaItem.querySelector('.memory-date-display');
+        const dateEdit = mediaItem.querySelector('.memory-date-edit');
+        const saveBtn = mediaItem.querySelector('.save-memory-date-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-memory-date-btn');
+        
+        const originalValue = dateEdit.dataset.original;
+        dateEdit.value = originalValue;
+        
+        dateDisplay.style.display = 'block';
+        dateEdit.style.display = 'none';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+
     
     async saveTitle(mediaItem) {
         const mediaId = mediaItem.dataset.id;
@@ -818,6 +1014,144 @@ class MediaManager {
             this.showMessage('Failed to update description: ' + error.message, 'error');
             this.cancelDescriptionEditing(mediaItem);
         }
+    }
+
+    async saveYear(mediaItem) {
+        const mediaId = mediaItem.dataset.id;
+        const yearEdit = mediaItem.querySelector('.year-edit');
+        const newYear = yearEdit.value.trim();
+        
+        try {
+            const response = await fetch(`/api/media/${mediaId}/update`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ year: newYear })
+            });
+            
+            if (response.ok) {
+                const yearDisplay = mediaItem.querySelector('.year-display');
+                yearDisplay.innerHTML = `<i class="fas fa-calendar"></i> Year: ${newYear || 'Not set'}`;
+                yearEdit.dataset.original = newYear;
+                
+                this.cancelYearEditing(mediaItem);
+                this.showMessage('Year updated successfully', 'success');
+            } else {
+                const result = await response.json();
+                throw new Error(result.message || 'Update failed');
+            }
+        } catch (error) {
+            console.error('Update error:', error);
+            this.showMessage('Failed to update year: ' + error.message, 'error');
+            this.cancelYearEditing(mediaItem);
+        }
+    }
+
+    async savePeople(mediaItem) {
+        const mediaId = mediaItem.dataset.id;
+        const peopleEdit = mediaItem.querySelector('.people-edit');
+        const newPeople = peopleEdit.value.trim();
+        
+        try {
+            const response = await fetch(`/api/media/${mediaId}/update`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ people: newPeople })
+            });
+            
+            if (response.ok) {
+                const peopleDisplay = mediaItem.querySelector('.people-display');
+                peopleDisplay.innerHTML = `<i class="fas fa-users"></i> People: ${newPeople || 'Not set'}`;
+                peopleEdit.dataset.original = newPeople;
+                
+                this.cancelPeopleEditing(mediaItem);
+                this.showMessage('People updated successfully', 'success');
+            } else {
+                const result = await response.json();
+                throw new Error(result.message || 'Update failed');
+            }
+        } catch (error) {
+            console.error('Update error:', error);
+            this.showMessage('Failed to update people: ' + error.message, 'error');
+            this.cancelPeopleEditing(mediaItem);
+        }
+    }
+
+    async saveMemoryDate(mediaItem) {
+        const mediaId = mediaItem.dataset.id;
+        const dateEdit = mediaItem.querySelector('.memory-date-edit');
+        const newDate = dateEdit.value.trim();
+        
+        try {
+            const response = await fetch(`/api/media/${mediaId}/update`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memory_date: newDate })
+            });
+            
+            if (response.ok) {
+                const dateDisplay = mediaItem.querySelector('.memory-date-display');
+                const displayDate = newDate ? new Date(newDate).toLocaleDateString() : 'Not set';
+                dateDisplay.innerHTML = `<i class="fas fa-clock"></i> Date: ${displayDate}`;
+                dateEdit.dataset.original = newDate;
+                
+                this.cancelMemoryDateEditing(mediaItem);
+                this.showMessage('Date updated successfully', 'success');
+            } else {
+                const result = await response.json();
+                throw new Error(result.message || 'Update failed');
+            }
+        } catch (error) {
+            console.error('Update error:', error);
+            this.showMessage('Failed to update date: ' + error.message, 'error');
+            this.cancelMemoryDateEditing(mediaItem);
+        }
+    }
+
+
+
+    cancelYearEditing(mediaItem) {
+        const yearDisplay = mediaItem.querySelector('.year-display');
+        const yearEdit = mediaItem.querySelector('.year-edit');
+        const saveBtn = mediaItem.querySelector('.save-year-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-year-btn');
+        
+        const originalValue = yearEdit.dataset.original;
+        yearEdit.value = originalValue;
+        
+        yearDisplay.style.display = 'block';
+        yearEdit.style.display = 'none';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+
+    cancelPeopleEditing(mediaItem) {
+        const peopleDisplay = mediaItem.querySelector('.people-display');
+        const peopleEdit = mediaItem.querySelector('.people-edit');
+        const saveBtn = mediaItem.querySelector('.save-people-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-people-btn');
+        
+        const originalValue = peopleEdit.dataset.original;
+        peopleEdit.value = originalValue;
+        
+        peopleDisplay.style.display = 'block';
+        peopleEdit.style.display = 'none';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+    }
+
+    cancelMemoryDateEditing(mediaItem) {
+        const dateDisplay = mediaItem.querySelector('.memory-date-display');
+        const dateEdit = mediaItem.querySelector('.memory-date-edit');
+        const saveBtn = mediaItem.querySelector('.save-memory-date-btn');
+        const cancelBtn = mediaItem.querySelector('.cancel-memory-date-btn');
+        
+        const originalValue = dateEdit.dataset.original;
+        dateEdit.value = originalValue;
+        
+        dateDisplay.style.display = 'block';
+        dateEdit.style.display = 'none';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
     }
     
     initLightbox() {
