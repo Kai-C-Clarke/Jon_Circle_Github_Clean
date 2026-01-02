@@ -2,16 +2,18 @@
 import os
 from openai import OpenAI
 from anthropic import Anthropic
-from flask import Flask, render_template, jsonify, request, send_file, session, Response
+from flask import Flask, render_template, jsonify, request, send_file, session, Response, redirect, url_for, flash
 from flask_cors import CORS
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from datetime import datetime
 from ai_photo_matcher import suggest_photos_for_memory, apply_suggestion, suggest_all_memories
 
 # Import our modules
 from database import init_db, get_db, migrate_db
 from search_engine import EnhancedSearch
-from ai_search import ai_searcher  # NEW: Import AI search
+from ai_search import ai_searcher
 from utils import allowed_file, parse_date_input, categorize_memory
+from auth import User, create_user, authenticate_user, get_user_by_id, change_password, get_user_count
 
 from werkzeug.utils import secure_filename
 import uuid
@@ -20,58 +22,15 @@ from pdf_generator import generate_memory_pdf, generate_memory_album_pdf
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 CORS(app)
-from functools import wraps
-from database import get_db
 
-#try:
-######    with open('chat_migration.sql', 'r') as f:
-#####        migration_sql = f.read()
-####   db.executescript(migration_sql)
-###    db.commit()
-##except FileNotFoundError:
-#    pass  # Skip migration if file doesn't exist
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
-# HTTP Basic Authentication
-def check_auth(username, password):
-    """Validate username and password from environment variables."""
-    valid_username = os.getenv('APP_USERNAME', 'admin')
-    valid_password = os.getenv('APP_PASSWORD', 'changeme')
-    return username == valid_username and password == valid_password
-
-def authenticate():
-    """Send 401 response to trigger browser login."""
-    return Response(
-        'Authentication required. Please log in.',
-        401,
-        {'WWW-Authenticate': 'Basic realm="The Circle - Login Required"'}
-    )
-
-def requires_auth(f):
-    """Decorator to require authentication on routes."""
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
-            return authenticate()
-        return f(*args, **kwargs)
-    return decorated
-
-# Apply authentication to all routes
-@app.before_request
-def require_authentication():
-    """Require authentication on all routes except static files."""
-    # Skip authentication for static files
-    if request.path.startswith('/static/'):
-        return None
-    
-    # Skip authentication if disabled (for local development)
-    if os.getenv('DISABLE_AUTH', 'false').lower() == 'true':
-        return None
-    
-    # Check authentication
-    auth = request.authorization
-    if not auth or not check_auth(auth.username, auth.password):
-        return authenticate()
+@login_manager.user_loader
+def load_user(user_id):
+    return get_user_by_id(int(user_id))
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -277,16 +236,127 @@ def parse_biography_into_chapters(narrative_text):
     
     return chapters
 
+# ============= AUTHENTICATION ROUTES =============
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = authenticate_user(username, password)
+        if user:
+            login_user(user)
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error="Invalid username or password")
+    
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Registration page"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    # Check if first user - if so, allow registration
+    # Otherwise, disable registration (single-user app)
+    user_count = get_user_count()
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        email = request.form.get('email')
+        
+        # Validate passwords match
+        if password != confirm_password:
+            return render_template('register.html', error="Passwords do not match")
+        
+        # Validate password length
+        if len(password) < 6:
+            return render_template('register.html', error="Password must be at least 6 characters")
+        
+        # Create user
+        user, error = create_user(username, password, email)
+        if error:
+            return render_template('register.html', error=error)
+        
+        # Auto-login after registration
+        login_user(user)
+        return redirect(url_for('index'))
+    
+    return render_template('register.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Logout route"""
+    logout_user()
+    return redirect(url_for('login'))
+
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    """User settings page"""
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validate passwords match
+        if new_password != confirm_password:
+            return render_template('settings.html', error="New passwords do not match")
+        
+        # Validate password length
+        if len(new_password) < 6:
+            return render_template('settings.html', error="Password must be at least 6 characters")
+        
+        # Change password
+        success, message = change_password(current_user.id, current_password, new_password)
+        if success:
+            return render_template('settings.html', success=message)
+        else:
+            return render_template('settings.html', error=message)
+    
+    return render_template('settings.html')
+
+# ============= END AUTHENTICATION ROUTES =============        
+
 # ============================================
 # BASIC ROUTES
 # ============================================
-
 @app.route('/')
+@login_required
+def index():
+    # Check if user has completed their profile
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT COUNT(*) as count FROM user_profile")
+    profile_count = cursor.fetchone()['count']
+    db.close()
+    
+    # If no profile exists, show onboarding form
+    if profile_count == 0:
+        return render_template('onboarding.html')
+    
+    # Profile exists, redirect to landing splash
+    return redirect(url_for('landing'))
+
+@app.route('/landing')
+@login_required
 def landing():
+    """Landing splash screen with BEGIN button"""
     return render_template('landing.html')
 
-@app.route('/app')
-def main_app():
+@app.route('/main')
+@login_required
+def main():
+    """Main app - the actual Circle interface"""
     return render_template('index.html')
 
 @app.route('/api/health', methods=['GET'])
@@ -298,6 +368,7 @@ def health_check():
     })
 
 @app.route('/goodbye')
+@login_required
 def goodbye():
     """Exit/goodbye page with instructions on how to close the browser."""
     return render_template('goodbye.html')
@@ -307,25 +378,36 @@ def goodbye():
 # ============================================
 
 @app.route('/api/profile/save', methods=['POST'])
+@login_required
 def save_profile():
     try:
-        data = request.json
+        # Accept both JSON and form data
+        if request.is_json:
+            data = request.json
+        else:
+            data = request.form
+        
         db = get_db()
         cursor = db.cursor()
         
         cursor.execute("DELETE FROM user_profile")
         cursor.execute('''INSERT INTO user_profile (name, birth_date, family_role, birth_place, created_at) 
                          VALUES (?, ?, ?, ?, ?)''',
-                      (data['name'], data['birth_date'], data['family_role'], 
-                       data.get('birth_place', ''), datetime.now().isoformat()))
+                      (data.get('name', ''), 
+                       data.get('birth_date', ''), 
+                       data.get('interests', ''), 
+                       data.get('birth_place', ''), 
+                       datetime.now().isoformat()))
         
         db.commit()
-        return jsonify({"status": "success", "message": "Profile saved"})
+        return jsonify({"success": True, "message": "Profile saved"})
         
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        print(f"Error saving profile: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/profile/get', methods=['GET'])
+@login_required
 def get_profile():
     try:
         db = get_db()
@@ -351,6 +433,7 @@ def get_profile():
 # ============================================
 
 @app.route('/api/memories/save', methods=['POST'])
+@login_required
 def save_memory():
     """Save a new memory with optional audio recording."""
     try:
@@ -418,6 +501,7 @@ def save_memory():
         return jsonify({"status": "error", "message": "Failed to save memory"}), 500
 
 @app.route('/api/memories/delete/<int:memory_id>', methods=['DELETE'])
+@login_required
 def delete_memory(memory_id):
     """Delete a memory and its associated audio file."""
     try:
@@ -465,6 +549,7 @@ def delete_memory(memory_id):
         return jsonify({"status": "error", "message": "Failed to delete memory"}), 500
 
 @app.route('/api/memories/get', methods=['GET'])
+@login_required
 def get_memories():
     """Get all memories for the timeline."""
     try:
@@ -498,6 +583,7 @@ def get_memories():
         return jsonify({"status": "error", "message": "Failed to retrieve memories"}), 500
 
 @app.route('/api/memories/<int:memory_id>/media', methods=['GET'])
+@login_required
 def get_memory_media(memory_id):
     """Get all media linked to a specific memory."""
     try:
@@ -531,6 +617,7 @@ def get_memory_media(memory_id):
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
 @app.route('/api/memories/<int:memory_id>/media/<int:media_id>', methods=['POST'])
+@login_required
 def add_media_to_memory(memory_id, media_id):
     """Link a single media item to a memory."""
     try:
@@ -553,6 +640,7 @@ def add_media_to_memory(memory_id, media_id):
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
 @app.route('/api/memories/<int:memory_id>/media/<int:media_id>', methods=['DELETE'])
+@login_required
 def remove_media_from_memory(memory_id, media_id):
     """Remove a media link."""
     try:
@@ -566,6 +654,7 @@ def remove_media_from_memory(memory_id, media_id):
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
 @app.route('/api/memories/<int:memory_id>/media', methods=['POST'])
+@login_required
 def link_multiple_media_to_memory(memory_id):
     """Link multiple media items to a memory at once (bulk operation)."""
     try:
@@ -596,6 +685,7 @@ def link_multiple_media_to_memory(memory_id):
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
 @app.route('/api/media/available', methods=['GET'])
+@login_required
 def get_available_media():
     """Get all available media for linking (used by photo picker UI)."""
     try:
@@ -633,6 +723,7 @@ def get_available_media():
 # ============================================
 
 @app.route('/api/memories/<int:memory_id>', methods=['PUT'])
+@login_required
 def update_memory(memory_id):
     """Update an existing memory."""
     try:
@@ -694,6 +785,7 @@ def update_memory(memory_id):
         return jsonify({"status": "error", "message": "Failed to update memory"}), 500
 
 @app.route('/api/memories/<int:memory_id>', methods=['GET'])
+@login_required
 def get_memory(memory_id):
     """Get a specific memory for editing."""
     try:
@@ -728,6 +820,7 @@ def get_memory(memory_id):
         return jsonify({"status": "error", "message": "Failed to retrieve memory"}), 500
 
 @app.route('/api/search/smart', methods=['POST'])
+@login_required
 def smart_search():
     try:
         data = request.json
@@ -745,6 +838,7 @@ def smart_search():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/search/ai', methods=['POST'])
+@login_required
 def ai_search():
     try:
         data = request.json
@@ -771,6 +865,7 @@ def ai_search():
 # ============================================
 
 @app.route('/api/audio/save', methods=['POST'])
+@login_required
 def save_audio_recording():
     """Save voice recording to server."""
     try:
@@ -815,6 +910,7 @@ def save_audio_recording():
         return jsonify({"status": "error", "message": "Failed to save audio"}), 500
 
 @app.route('/api/audio/<filename>', methods=['GET'])
+@login_required
 def serve_audio(filename):
     """Serve audio file for playback."""
     try:
@@ -830,6 +926,7 @@ def serve_audio(filename):
         return jsonify({"status": "error", "message": "Failed to serve audio"}), 404
 
 @app.route('/api/media/upload', methods=['POST'])
+@login_required
 def upload_media():
     try:
         if 'media' not in request.files:
@@ -915,6 +1012,7 @@ def upload_media():
         return jsonify({"status": "error", "message": "Failed to upload file"}), 500
 
 @app.route('/api/export/biography/generate', methods=['POST'])
+@login_required
 def generate_biography_draft():
     """Generate biography using DeepSeek and auto-save to session."""
     try:
@@ -981,6 +1079,7 @@ def generate_biography_draft():
         }), 500
 
 @app.route('/api/export/biography/save-edits', methods=['POST'])
+@login_required
 def save_biography_edits():
     """Save user's edited biography version."""
     try:
@@ -1017,6 +1116,7 @@ def save_biography_edits():
         }), 500
 
 @app.route('/api/export/biography/pdf', methods=['POST'])
+@login_required
 def generate_biography_pdf_route():
     """Generate magazine-style PDF from approved biography draft."""
     try:
@@ -1086,6 +1186,7 @@ def generate_biography_pdf_route():
         }), 500
 
 @app.route('/uploads/<filename>')
+@login_required
 def serve_uploaded_file(filename):
     """Serve uploaded files directly."""
     try:
@@ -1120,6 +1221,7 @@ def serve_uploaded_file(filename):
         return jsonify({"status": "error", "message": "Failed to serve file"}), 500
 
 @app.route('/api/media/all', methods=['GET'])
+@login_required
 def get_all_media():
     """Get all uploaded media files."""
     try:
@@ -1156,6 +1258,7 @@ def get_all_media():
         return jsonify({"status": "error", "message": "Failed to retrieve media"}), 500
 
 @app.route('/api/media/delete/<int:media_id>', methods=['DELETE'])
+@login_required
 def delete_media(media_id):
     """Delete a media file."""
     try:
@@ -1194,6 +1297,7 @@ def delete_media(media_id):
         return jsonify({"status": "error", "message": "Failed to delete media"}), 500
 
 @app.route('/api/media/preview/<filename>')
+@login_required
 def media_preview(filename):
     """Generate thumbnail/preview for images."""
     try:
@@ -1212,6 +1316,7 @@ def media_preview(filename):
         return jsonify({"status": "error", "message": "Failed to serve preview"}), 500
 
 @app.route('/api/media/<int:media_id>/update', methods=['PUT'])
+@login_required
 def update_media(media_id):
     """Update media metadata including title, description, year, memory_date, and people."""
     try:
@@ -1290,6 +1395,7 @@ def update_media(media_id):
 # ============================================
 
 @app.route('/api/memories/<int:memory_id>/suggest-photos', methods=['GET'])
+@login_required
 def get_photo_suggestions(memory_id):
     """Get AI-suggested photos for a memory."""
     try:
@@ -1315,6 +1421,7 @@ def get_photo_suggestions(memory_id):
         }), 500
 
 @app.route('/api/memories/<int:memory_id>/browse-photos', methods=['GET'])
+@login_required
 def browse_all_photos(memory_id):
     """Get all unlinked photos for manual selection."""
     try:
@@ -1359,6 +1466,7 @@ def browse_all_photos(memory_id):
         }), 500
 
 @app.route('/api/memories/<int:memory_id>/accept-suggestion', methods=['POST'])
+@login_required
 def accept_photo_suggestion(memory_id):
     """Accept an AI photo suggestion and link it."""
     try:
@@ -1386,6 +1494,7 @@ def accept_photo_suggestion(memory_id):
         }), 500
 
 @app.route('/api/memories/suggest-all', methods=['POST'])
+@login_required
 def suggest_all_photos():
     """Get AI suggestions for all memories (batch processing)."""
     try:
@@ -1421,6 +1530,7 @@ def suggest_all_photos():
 # ============================================
 
 @app.route('/api/pdf/generate/<pdf_type>', methods=['POST'])
+@login_required
 def generate_pdf(pdf_type):
     try:
         if pdf_type == 'album':
@@ -1435,6 +1545,7 @@ def generate_pdf(pdf_type):
         return jsonify({"status": "error", "message": "Failed to generate PDF"}), 500
 
 @app.route('/api/debug/media', methods=['GET'])
+@login_required
 def debug_media():
     """Debug endpoint to see what's in database vs filesystem."""
     import os
@@ -1516,11 +1627,13 @@ def get_chat_history(session_id, limit=50):
     ]
 
 @app.route('/chat')
+@login_required
 def chat_page():
     """Render chat interface"""
     return render_template('chat.html')
 
 @app.route('/api/chat/send', methods=['POST'])
+@login_required
 def chat_send():
     """Send message and get AI response"""
     try:
@@ -1588,6 +1701,7 @@ Keep responses conversational and warm, not formal or robotic.'''
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/chat/history')
+@login_required
 def chat_history():
     """Get chat history for current session"""
     session_id = get_chat_session_id()
@@ -1599,6 +1713,7 @@ def chat_history():
     })
 
 @app.route('/api/chat/new-session', methods=['POST'])
+@login_required
 def new_chat_session():
     """Start a new chat session"""
     session['chat_session_id'] = str(uuid.uuid4())

@@ -24,7 +24,15 @@ def init_db():
         birth_place TEXT,
         created_at TEXT
     )''')
-    
+    # Authentication users table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        email TEXT,
+        created_at TEXT NOT NULL,
+        last_login TEXT
+    )''')
     # Memories
     cursor.execute('''CREATE TABLE IF NOT EXISTS memories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
